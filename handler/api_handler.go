@@ -212,9 +212,9 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write(ret_json)
 	} else {
-		ret_json := response("NO_CONTENT", 204, "There is no content for this JWT")
+		ret_json := response("UNAUTHORIZED_ERROR/TOKEN_REVOKED", 401, "Token has been revoked or logged out")
 		w.Header().Add("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(http.StatusUnauthorized)
 		w.Write(ret_json)
 	}
 }
