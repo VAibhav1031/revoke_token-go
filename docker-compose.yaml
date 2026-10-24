@@ -1,0 +1,56 @@
+services:
+  app:
+    build: . 
+
+    ports:
+      - "127.0.0.1:2102:2102"
+    
+    env_file:
+      - .env
+
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  db:
+    image: postgres:latest
+
+    ports:
+      - "5434:5432"
+
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+   
+    volumes:
+      - app:/var/lib/postgresql/data
+      - ./initial_script.sql:/docker-entrypoint-initdb.d/initial_script.sql  
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+
+  redis:
+    image: redis:latest
+    # container_name: redis_server
+    ports: 
+      - "6380:6379"
+
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+    volumes:
+      - redis_data:/data 
+
+    command: ["redis-server","--maxmemory","1gb", "--appendonly", "yes","--requirepass","${REDIS_PASSWORD}"]
+
+
+volumes:
+  app:
+  redis_data:
