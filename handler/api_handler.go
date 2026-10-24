@@ -102,20 +102,19 @@ func (db *DBPooler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	hashedPassword := hashPassword(w, register_json.Password)
-	query_text := `INSERT INTO  app.user(username, password, email)  VALUES ($1 , $2, $3)`
+	query_text := `INSERT INTO  app.user (username, hashed_password, email)  VALUES ($1 , $2, $3)`
 	tag, err := db.dbPool.Exec(ctx, query_text, register_json.Username, hashedPassword, register_json.Email)
 
-	if err != nil {
-		log.Printf("DB Error: %v", err)
+	if err != nil || tag.RowsAffected() == 0 {
+		log.Printf("Insertion Failed : %v", err)
 		internal_server_error(w, "")
 		return
 	}
 
-	if tag.Insert() || tag.RowsAffected() == 0 {
-		log.Printf("DB Error : %v", err)
-		internal_server_error(w, "")
-		return
-	}
+	ret_json := response("OK", 201, "created")
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	w.Write(ret_json)
 }
 
 func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +122,7 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&login_json)
 	if err != nil {
-		log.Println("JSON Decoder Error")
+		log.Printf("JSON Decoder Error: %v", err)
 		return
 	}
 
@@ -177,6 +176,11 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tokenString := jwtCreation(user_id)
+	if tokenString == "" {
+		internal_server_error(w, "Unexpected internal server error")
+		return
+	}
+
 	ret_json := response("TOKEN", 200, tokenString)
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

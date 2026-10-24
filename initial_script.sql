@@ -7,6 +7,8 @@ SET client_encoding='UTF8';
 
 CREATE SCHEMA IF NOT EXISTS app;
 
+SET search_path=app,public;
+--
 -- Role Creation
 
 -- User role
@@ -17,12 +19,12 @@ CREATE ROLE app_user NOLOGIN;
 
 -- Access to schema and all.  
 GRANT CREATE,USAGE ON SCHEMA app TO admin;
-GRANT USAGE ON SCHEMA app to app_user;
+GRANT USAGE ON SCHEMA app TO app_user;
 
 
 CREATE ROLE real_app_user LOGIN PASSWORD 'tempSorcerer';
 
---inheritingh all those privileges from the group level role..
+--inheriting all those privileges from the group level role..
 GRANT app_user to real_app_user;
 
 
@@ -40,15 +42,11 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA app
 GRANT SELECT,INSERT,UPDATE ON TABLES to app_user;
 
 
-
-
-
-
 CREATE TABLE IF NOT EXISTS app.user(
     user_id INT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     username TEXT,
-    PASSWORD TEXT,
-    EMAIL TEXT
+    hashed_password TEXT,
+    email TEXT
 );
 
 

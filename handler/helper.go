@@ -98,7 +98,7 @@ func jwtCreation(user_id int) string {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	tokeString, err := token.SignedString(scrt_key)
+	tokeString, err := token.SignedString([]byte(scrt_key))
 
 	if err != nil {
 		log.Printf("Failed Creation JWT Token: %v", err)
