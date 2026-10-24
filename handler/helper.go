@@ -12,7 +12,6 @@ import (
 	"uuid"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/joho/godotenv"
 	"github.com/patrickmn/go-cache"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
@@ -26,11 +25,6 @@ var scrt_key string
 var rdb *redis.Client
 
 func init() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Printf(".env load error :%v", err)
-	}
-
 	scrt_key := os.Getenv("SECRET_KEY")
 	if scrt_key == "" {
 		log.Println("SECRET_KEY is Not Available....")
@@ -44,7 +38,7 @@ func init() {
 		DB:       0,
 	})
 
-	_, err = rdb.Ping(context.Background()).Result()
+	_, err := rdb.Ping(context.Background()).Result()
 	if err != nil {
 		log.Fatalf("Could not connect to the Redis: %v", err)
 	}

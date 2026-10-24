@@ -93,7 +93,7 @@ func (db *DBPooler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	if register_json.Password == "" || len(register_json.Password) < 8 || len(register_json.Password) > 30 {
 		log.Println("Invalid Password...")
-		ret_json := response("BAD_REQUEST", 400, "Invalid Register Details")
+		ret_json := response("BAD_REQUEST", 400, "Invalid Password..")
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write(ret_json)
@@ -102,7 +102,7 @@ func (db *DBPooler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	hashedPassword := hashPassword(w, register_json.Password)
-	query_text := `INSERT INTO TABLE user(username, password, email)  VALUES ($1 , $2, $3)`
+	query_text := `INSERT INTO  app.user(username, password, email)  VALUES ($1 , $2, $3)`
 	tag, err := db.dbPool.Exec(ctx, query_text, register_json.Username, hashedPassword, register_json.Email)
 
 	if err != nil {
@@ -152,7 +152,7 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	var hashedPassword string
 	var user_id int
-	query_st := `SELECT user_id, hashed_password  from user where username=$1`
+	query_st := `SELECT user_id, hashed_password  from app.user where username=$1`
 	err = h.db.dbPool.QueryRow(ctx, query_st, login_json.Username).Scan(&user_id, &hashedPassword)
 	if err != nil {
 		log.Printf("DB Error : %v\n", err)

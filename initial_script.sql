@@ -1,9 +1,9 @@
-CREATE DATABASE revoke;
+CREATE DATABASE revoke_arena;
 
 -- change to this database.  CAUSE WE Are going to create objects in this DB only ...
-\c revoke
+\c revoke_arena
 
-SET client_encodings='UTF8';
+SET client_encoding='UTF8';
 
 CREATE SCHEMA IF NOT EXISTS app;
 
@@ -15,9 +15,21 @@ CREATE ROLE admin LOGIN PASSWORD 'super_secret_133';
 -- groups role (role without the login  only privileges to the objects... which can be inherited to other temp user role)
 CREATE ROLE app_user NOLOGIN;
 
-
+-- Access to schema and all.  
 GRANT CREATE,USAGE ON SCHEMA app TO admin;
 GRANT USAGE ON SCHEMA app to app_user;
+
+
+CREATE ROLE real_app_user LOGIN PASSWORD 'tempSorcerer';
+
+--inheritingh all those privileges from the group level role..
+GRANT app_user to real_app_user;
+
+
+--- Give access to the connection of the DB
+GRANT CONNECT ON DATABASE revoke_arena  TO admin;
+GRANT CONNECT ON DATABASE revoke_arena  TO app_user;
+
 
 
 -- all future table object in the schema to these roles wouuld get these privileges implicitly noww.... 
@@ -29,10 +41,6 @@ GRANT SELECT,INSERT,UPDATE ON TABLES to app_user;
 
 
 
-CREATE ROLE real_app_user LOGIN PASSWORD 'temp_app_user';
-
---inheritingh all those privileges from the group level role..
-GRANT app_user to real_app_user;
 
 
 
