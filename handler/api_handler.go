@@ -68,7 +68,7 @@ func (db *DBPooler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&register_json)
 	if err != nil {
 		log.Println("JSON Decoder Error")
-		internal_server_error(w, "JSON Marshalling..")
+		internal_server_error(w, "Unexpected instance cause internal server error. TRY LATER :) ")
 		return
 	}
 
@@ -107,7 +107,7 @@ func (db *DBPooler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil || tag.RowsAffected() == 0 {
 		log.Printf("Insertion Failed : %v", err)
-		internal_server_error(w, "")
+		internal_server_error(w, "Unexpected instance cause internal server error. TRY LATER :) ")
 		return
 	}
 
@@ -123,6 +123,7 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&login_json)
 	if err != nil {
 		log.Printf("JSON Decoder Error: %v", err)
+		internal_server_error(w, "Unexpected instance cause internal server error. TRY LATER :) ")
 		return
 	}
 
@@ -154,8 +155,11 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	query_st := `SELECT user_id, hashed_password  from app.user where username=$1`
 	err = h.db.dbPool.QueryRow(ctx, query_st, login_json.Username).Scan(&user_id, &hashedPassword)
 	if err != nil {
-		log.Printf("DB Error : %v\n", err)
-		internal_server_error(w, "")
+		log.Printf("User doesnt exists : %v\n", err)
+		ret_json := response("NOT_FOUND", 404, "User Does not exists")
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write(ret_json)
 		return
 	}
 
@@ -177,7 +181,7 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	tokenString := jwtCreation(user_id)
 	if tokenString == "" {
-		internal_server_error(w, "Unexpected internal server error")
+		internal_server_error(w, "Unexpected instance cause internal server error. TRY LATER :) ")
 		return
 	}
 
@@ -196,7 +200,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 	// w4e havbe to give onlyh the
 
-	result := jwtAuthCheck(w)
+	result := jwtAuthCheck(w, r)
 	if result.err != nil {
 		return // already managed... all logs and all
 	}
@@ -208,9 +212,12 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		remaining_time := time.Now().Unix() - int64(result.current_exp_time)
 		err := blockThisJWT(ctx, rdb, result.jti, result.tokenString, time.Duration(remaining_time))
 		if err != nil {
-			internal_server_error(w, "")
+			internal_server_error(w, "Unexpected instance cause internal server error. TRY LATER :)")
 			return
 		}
+
+		log.Println("JWT is Revoked...")
+
 		ret_json := response("OK", 200, "Logout Sucessfully")
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

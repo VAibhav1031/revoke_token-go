@@ -20,13 +20,13 @@ import (
 var blockedTime = time.Minute * 15
 var maxAttempts = 4
 
-var scrt_key string
+var scrt_key []byte
 
 var rdb *redis.Client
 
 func init() {
-	scrt_key := os.Getenv("SECRET_KEY")
-	if scrt_key == "" {
+	scrt_key = []byte(os.Getenv("SECRET_KEY"))
+	if scrt_key == nil {
 		log.Println("SECRET_KEY is Not Available....")
 	}
 
@@ -107,7 +107,7 @@ func jwtCreation(user_id int) string {
 	return tokeString
 }
 
-func jwtVerification(tokenString string) (float64, string, int64, bool) {
+func jwtVerification(tokenString string) (float64, string, float64, bool) {
 	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected Signing MEthod", t.Header["alg"])
@@ -116,25 +116,26 @@ func jwtVerification(tokenString string) (float64, string, int64, bool) {
 	})
 
 	if err != nil || !token.Valid {
-		log.Printf("Token Expired...")
+		log.Printf("Token Expired...", err)
 		return -1, "", 0, false
 	}
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok {
-		return claims["user_id"].(float64), claims["jti"].(string), claims["exp"].(int64), true
+		return claims["user_id"].(float64), claims["jti"].(string), claims["exp"].(float64), true
 	}
 
 	return -1, "", 0, false
 }
 
-func jwtAuthCheck(w http.ResponseWriter) *authCheckResult {
+func jwtAuthCheck(w http.ResponseWriter, req *http.Request) *authCheckResult {
 
-	bearerToken := w.Header().Get("Authorization")
+	bearerToken := req.Header.Get("Authorization")
+	fmt.Println("bearer ", bearerToken)
 
 	if bearerToken == "" || !strings.HasPrefix(bearerToken, "Bearer") {
-		log.Println("Empty Bearerer Token..")
+		log.Printf("Empty Bearerer Token.. %v", bearerToken)
 		// call the error  thing
-		ret_json := response("INVALID_TOKEN", 401, "Token is Empty or invalid")
+		ret_json := response("INVALID_AUTH_TOKEN", 401, "Token is Empty or invalid")
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write(ret_json)
@@ -147,14 +148,14 @@ func jwtAuthCheck(w http.ResponseWriter) *authCheckResult {
 
 	if !ok {
 		log.Println("Expired Token....")
-		ret_json := response("EXPIRED_TOKEN", 401, "Expired Token")
+		ret_json := response("EXPIRED_AUTH_TOKEN", 401, "Expired Token")
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write(ret_json)
 		return &authCheckResult{user_id: -1, jti: "", tokenString: "", current_exp_time: 0, err: fmt.Errorf("Expired Token..")}
 	}
 
-	return &authCheckResult{user_id: int(user_id), jti: jti, tokenString: token, current_exp_time: current_exp_time, err: nil}
+	return &authCheckResult{user_id: int(user_id), jti: jti, tokenString: token, current_exp_time: int64(current_exp_time), err: nil}
 }
 
 func (c *AuthChecker) checkFailedAttempts(userName string) bool {
