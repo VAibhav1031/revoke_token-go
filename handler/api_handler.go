@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"encoding/json"
@@ -101,11 +102,26 @@ func (db *DBPooler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	hashedPassword := hashPassword(w, register_json.Password)
+	hashedPassword, err := hashPassword(w, register_json.Password)
+	if err != nil {
+		log.Printf("Password Hashing Failure...")
+		internal_server_error(w, "Unexpected instance causse internal  server error. TRY LATER :)")
+	}
+
 	query_text := `INSERT INTO  app.user (username, hashed_password, email)  VALUES ($1 , $2, $3)`
 	tag, err := db.dbPool.Exec(ctx, query_text, register_json.Username, hashedPassword, register_json.Email)
-
 	if err != nil || tag.RowsAffected() == 0 {
+		sqlState := strings.Split(err.Error(), " ")
+		// SQLSTATE 23505 -- it is for the conflicting UNIQUE constraint  in the SQL
+		unique_constraint_conflict := sqlState[len(sqlState)-2] + " " + sqlState[len(sqlState)-1]
+
+		if unique_constraint_conflict == "(SQLSTATE 23505)" {
+			log.Printf("Insertion Failed : Unique-Key Constraint error")
+			ret_json := response("CONFLICT", 409, "User Already Exists")
+			w.Header().Add("Content-Type", "application/json")
+			w.Write(ret_json)
+			return
+		}
 		log.Printf("Insertion Failed : %v", err)
 		internal_server_error(w, "Unexpected instance cause internal server error. TRY LATER :) ")
 		return

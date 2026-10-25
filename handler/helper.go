@@ -72,15 +72,14 @@ func internal_server_error(w http.ResponseWriter, msg string) {
 	w.Write(ret_json)
 }
 
-func hashPassword(w http.ResponseWriter, password string) []byte {
+func hashPassword(w http.ResponseWriter, password string) ([]byte, error) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("Password Hashing Failure...")
-		internal_server_error(w, "")
+		return nil, err
 	}
 
-	return hashedPassword
+	return hashedPassword, nil
 }
 
 func checkPassword(hashedPassword string, password string) bool {
@@ -130,7 +129,6 @@ func jwtVerification(tokenString string) (float64, string, float64, bool) {
 func jwtAuthCheck(w http.ResponseWriter, req *http.Request) *authCheckResult {
 
 	bearerToken := req.Header.Get("Authorization")
-	fmt.Println("bearer ", bearerToken)
 
 	if bearerToken == "" || !strings.HasPrefix(bearerToken, "Bearer") {
 		log.Printf("Empty Bearerer Token.. %v", bearerToken)

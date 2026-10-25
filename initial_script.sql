@@ -44,9 +44,9 @@ GRANT SELECT,INSERT,UPDATE ON TABLES to app_user;
 
 CREATE TABLE IF NOT EXISTS app.user(
     user_id INT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    username TEXT,
-    hashed_password TEXT,
-    email TEXT
+    username TEXT NOT NULL UNIQUE,
+    hashed_password TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE
 );
 
 
