@@ -2,6 +2,10 @@ package handler
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -209,4 +213,67 @@ func isJWTRevoked(ctx context.Context, rd *redis.Client, jti string) bool {
 	}
 
 	return true
+}
+
+func generateHMAC256signedCursor(cursor_det []byte, secretKey []byte) string {
+	mac := hmac.New(sha256.New, secretKey)
+	mac.Write([]byte(cursor_det))
+
+	// (passing nil means calculate from scratch)
+	rawMac := mac.Sum(nil)
+
+	//  raw binary array into a human-readable Hex string
+	hexMac := hex.EncodeToString(rawMac)
+
+	return base64.RawStdEncoding.EncodeToString([]byte(cursor_det)) + "." + hexMac
+
+}
+
+func isValidSignature(receivedCursor string, secretKey []byte) ([]byte, bool) {
+
+	result_ := strings.Split(receivedCursor, ".")
+	payload, digestHMAC := result_[0], result_[1]
+
+	// Calculate the expected MAC based on the message
+	mac := hmac.New(sha256.New, secretKey)
+	mac.Write([]byte(payload))
+	expectedMAC := mac.Sum(nil)
+
+	// Decode the incoming hex string back to raw bytes
+	receivedMAC, err := hex.DecodeString(digestHMAC)
+	if err != nil {
+		return nil, false
+	}
+
+	// if string(expectedMAC) == string(receivedMAC) { ... } (Vulnerable to timing attacks)
+
+	payload_decoded, err := base64.RawStdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, false
+	}
+
+	return payload_decoded, hmac.Equal(receivedMAC, expectedMAC)
+}
+
+type postsData struct {
+	PostID      int    `json:"post_id"`
+	PostTitle   string `json:"post_title"`
+	PostContent string `json:"post_content"`
+	CreatedAt   string `json:"created_at"`
+}
+
+type paginationJson struct {
+	NextCursor string `json:"next_cursor"`
+	HasMore    bool   `json:"has_more"`
+}
+
+type postsReturn struct {
+	Data       []postsData    `json:"data"`
+	Pagination paginationJson `json:"pagination"`
+}
+
+// this is only used for the creation of the signed HMAC nextCursor value nothing else..
+type nextCursor struct {
+	Timestamp string `json:"timestamp"`
+	ID        int    `json:"post_id"`
 }

@@ -21,15 +21,19 @@ func muxHandler(pool *pgxpool.Pool) *http.ServeMux {
 
 	h := handler.NewHandler(authHandle, dbPoolHandle)
 	newMux := http.NewServeMux()
+
+	// default root endpoint
 	newMux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"code":"OK","status_code":200,"message":"success"}`))
 	})
+
 	newMux.HandleFunc("POST /auth/register", dbPoolHandle.RegisterHandler)
 	newMux.HandleFunc("POST /auth/login", h.LoginHandler)
 	newMux.HandleFunc("/auth/logout", handler.LogoutHandler)
-
+	newMux.HandleFunc("POST /{usrename}/post", dbPoolHandle.NewPostHandler)
+	newMux.HandleFunc("GET /{username}/post/", dbPoolHandle.GetPostHandler)
 	return newMux
 }
 
