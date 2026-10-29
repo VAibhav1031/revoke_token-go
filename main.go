@@ -32,7 +32,12 @@ func muxHandler(pool *pgxpool.Pool) *http.ServeMux {
 	newMux.HandleFunc("POST /auth/register", dbPoolHandle.RegisterHandler)
 	newMux.HandleFunc("POST /auth/login", h.LoginHandler)
 	newMux.HandleFunc("/auth/logout", handler.LogoutHandler)
-	newMux.HandleFunc("POST /{usrename}/post", dbPoolHandle.NewPostHandler)
+
+	// removing  username from the url , depends totally on the JWT ID for the WRITE
+	// this helps from that misuser of the username in the url while POST  HTTP request..
+	newMux.HandleFunc("POST /post", dbPoolHandle.NewPostHandler)
+
+	// for the GET post of that particular user having username is okay and nice
 	newMux.HandleFunc("GET /{username}/post", dbPoolHandle.GetPostsHandler)
 	return newMux
 }

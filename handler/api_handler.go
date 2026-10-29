@@ -271,6 +271,7 @@ func (db *DBPooler) NewPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
 	if isJWTRevoked(ctx, rdb, result.jti) {
 		ret_json := response("UNAUTHORIZED_ERROR/TOKEN_REVOKED", 401, "Token has been revoked or logged out")
 		w.Header().Add("Content-Type", "application/json")
@@ -328,7 +329,44 @@ func (db *DBPooler) GetPostsHandler(w http.ResponseWriter, r *http.Request) {
 		return // already managed... all logs and all
 	}
 
+	username := r.PathValue("username")
 	ctx := r.Context()
+
+	// only for the READ Requests where we have public url having username  like this {username}/post
+	// then we have to check the JWT ID and the username belong to same or not
+	var given_user_id_check int
+	query_check := `SELECT user_id FROM app.users where username=$1;`
+	err := db.dbPool.QueryRow(ctx, query_check, username).Scan(&given_user_id_check)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			log.Println("No rows found!")
+			// Means there is no such username..
+			// Even though not Exist HTTP request used to be 404 NOT FOUND , but for security reason (less guessable) we use 403
+			ret_json := response("FORBIDDEN_REQUEST", 403, "Access Denied")
+			w.Header().Add("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write(ret_json)
+			return
+		} else {
+			// This handles database syntax errors, connection drops, etc.
+			log.Printf("Database error occurred: %s\n", err.Error())
+			internal_server_error(w, "")
+			return
+		}
+
+	}
+
+	if given_user_id_check != result.user_id {
+		// exist but doesnt match..
+		// keeping same respone for both  username exists and dont exists , may help in baffling
+		ret_json := response("FORBIDDEN_REQUEST", 403, "Access Denied")
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		w.Write(ret_json)
+		return
+
+	}
+
 	if isJWTRevoked(ctx, rdb, result.jti) {
 		ret_json := response("UNAUTHORIZED_ERROR/TOKEN_REVOKED", 401, "Token has been revoked or logged out")
 		w.Header().Add("Content-Type", "application/json")
