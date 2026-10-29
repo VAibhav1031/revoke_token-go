@@ -33,7 +33,7 @@ func muxHandler(pool *pgxpool.Pool) *http.ServeMux {
 	newMux.HandleFunc("POST /auth/login", h.LoginHandler)
 	newMux.HandleFunc("/auth/logout", handler.LogoutHandler)
 	newMux.HandleFunc("POST /{usrename}/post", dbPoolHandle.NewPostHandler)
-	newMux.HandleFunc("GET /{username}/post/", dbPoolHandle.GetPostHandler)
+	newMux.HandleFunc("GET /{username}/post", dbPoolHandle.GetPostsHandler)
 	return newMux
 }
 

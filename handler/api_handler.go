@@ -134,6 +134,7 @@ func (db *DBPooler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("User %s Registered Sucessfully..\n", register_json.Username)
 	ret_json := response("OK", 201, "created")
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -208,6 +209,7 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("User %s login Sucessfully..\n", login_json.Username)
 	ret_json := response("TOKEN", 200, tokenString)
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -241,6 +243,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 		log.Println("JWT is Revoked...")
 
+		log.Printf("User %d login Sucessfully..\n", result.user_id)
 		ret_json := response("OK", 200, "Logout Sucessfully")
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -301,7 +304,7 @@ func (db *DBPooler) NewPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query_st := `INSERT INTO posts (post_title,post_content) VALUES ($1, $2)`
+	query_st := `INSERT INTO app.posts (post_title,post_content) VALUES ($1, $2);`
 
 	tag, err := db.dbPool.Exec(ctx, query_st, post_detail.PostTitle, post_detail.PostContent)
 	if err != nil || tag.RowsAffected() == 0 {
@@ -310,6 +313,7 @@ func (db *DBPooler) NewPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("Post Created Sucessfully")
 	ret_json := response("OK", 201, "created")
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -352,7 +356,7 @@ func (db *DBPooler) GetPostsHandler(w http.ResponseWriter, r *http.Request) {
 	var last_q_created_at string
 	var post_data []postsData
 
-	username := r.PathValue("username")
+	// username := r.PathValue("username")
 
 	n_cursor := r.URL.Query().Get("next_cursor")
 	limit_st := r.URL.Query().Get("limit")
@@ -378,8 +382,8 @@ func (db *DBPooler) GetPostsHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			query_st := `SELECT post_id , post_title, post_content from posts where user_id = $1 and username=$2 and created_at > $3 limit $4;`
-			rows, err := db.dbPool.Query(ctx, query_st, result.user_id, username, nc.Timestamp, limit)
+			query_st := `SELECT post_id , post_title, post_content from app.posts where user_id = $1 and created_at > $3 limit $4;`
+			rows, err := db.dbPool.Query(ctx, query_st, result.user_id, nc.Timestamp, limit)
 			if err != nil {
 				log.Printf("DB Error: %v\n", err)
 				internal_server_error(w, "")
@@ -393,11 +397,13 @@ func (db *DBPooler) GetPostsHandler(w http.ResponseWriter, r *http.Request) {
 
 			}
 
+			log.Println("len if block", len(post_data))
+
 		}
 	} else {
 
-		query_st := `SELECT post_id , post_title, post_content from posts where user_id = $1  and username=$2 limit $3;`
-		rows, err := db.dbPool.Query(ctx, query_st, result.user_id, username, limit)
+		query_st := `SELECT post_id , post_title, post_content from app.posts where user_id = $1  limit $2;`
+		rows, err := db.dbPool.Query(ctx, query_st, result.user_id, limit)
 		if err != nil {
 			log.Printf("DB Error: %v\n", err)
 			internal_server_error(w, "")
@@ -411,13 +417,16 @@ func (db *DBPooler) GetPostsHandler(w http.ResponseWriter, r *http.Request) {
 
 		}
 
+		log.Println("len else block", len(post_data))
 	}
 
+	log.Println("len before check block", len(post_data))
 	// why this check cause it is very important to know that we are already using the sql limit keyword to get to that much of row
 	// if the row is less than that means it has that much only
 	if len(post_data) > 0 {
+		log.Println("Len of post_data is > 0")
 		last_q_created_at = post_data[len(post_data)-1].CreatedAt
-		query_st_has_more := `SELECT count(*) from posts where user_id= $1 and created_at> $2`
+		query_st_has_more := `SELECT count(*) from app.posts where user_id= $1 and created_at> $2`
 
 		err = db.dbPool.QueryRow(ctx, query_st_has_more, result.user_id, last_q_created_at).Scan(&count)
 		if err != nil {
@@ -469,6 +478,7 @@ func (db *DBPooler) GetPostsHandler(w http.ResponseWriter, r *http.Request) {
 			w.Header().Add("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write(pag_ret)
+			return
 		}
 	}
 
