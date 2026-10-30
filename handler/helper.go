@@ -230,50 +230,34 @@ func generateHMAC256signedCursor(cursor_det []byte, secretKey []byte) string {
 }
 
 func isValidSignature(receivedCursor string, secretKey []byte) ([]byte, bool) {
-
 	result_ := strings.Split(receivedCursor, ".")
+	if len(result_) != 2 {
+		return nil, false
+	}
 	payload, digestHMAC := result_[0], result_[1]
 
-	// Calculate the expected MAC based on the message
-	mac := hmac.New(sha256.New, secretKey)
-	mac.Write([]byte(payload))
-	expectedMAC := mac.Sum(nil)
-
-	// Decode the incoming hex string back to raw bytes
 	receivedMAC, err := hex.DecodeString(digestHMAC)
 	if err != nil {
+		log.Printf("Error in DecodingString of receivedMac: %v", err)
 		return nil, false
 	}
 
-	// if string(expectedMAC) == string(receivedMAC) { ... } (Vulnerable to timing attacks)
-
-	payload_decoded, err := base64.RawStdEncoding.DecodeString(payload)
+	payloadDecoded, err := base64.RawStdEncoding.DecodeString(payload)
 	if err != nil {
+		log.Printf("Unable to decode  base64 cursor detail: %v", err)
 		return nil, false
 	}
 
-	return payload_decoded, hmac.Equal(receivedMAC, expectedMAC)
-}
+	// Calculate expected MAC
+	mac := hmac.New(sha256.New, secretKey)
+	mac.Write(payloadDecoded)
+	expectedMAC := mac.Sum(nil)
 
-type postsData struct {
-	PostID      int    `json:"post_id"`
-	PostTitle   string `json:"post_title"`
-	PostContent string `json:"post_content"`
-	CreatedAt   string `json:"created_at"`
-}
+	// Verify signature FIRST (Timing-attack safe via hmac.Equal)
+	if !hmac.Equal(receivedMAC, expectedMAC) {
+		log.Printf("Invalid Cursor..: %v\n", err)
+		return nil, false
+	}
 
-type paginationJson struct {
-	NextCursor string `json:"next_cursor"`
-	HasMore    bool   `json:"has_more"`
-}
-
-type postsReturn struct {
-	Data       []postsData    `json:"data"`
-	Pagination paginationJson `json:"pagination"`
-}
-
-// this is only used for the creation of the signed HMAC nextCursor value nothing else..
-type nextCursor struct {
-	Timestamp string `json:"timestamp"`
-	ID        int    `json:"post_id"`
+	return payloadDecoded, true
 }

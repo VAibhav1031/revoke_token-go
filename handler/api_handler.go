@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
+// handlers struct
 type register struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
@@ -37,14 +39,12 @@ type Response struct {
 	Message    string `json:"message"`
 }
 
-type logout struct {
-}
+//*******methods related Struct********
 
 type DBPooler struct {
 	dbPool *pgxpool.Pool
 }
 
-// new pool populator
 func NewPooler(pool *pgxpool.Pool) *DBPooler {
 	return &DBPooler{dbPool: pool}
 }
@@ -65,6 +65,31 @@ type Handler struct {
 
 func NewHandler(auth *AuthChecker, pooler *DBPooler) *Handler {
 	return &Handler{at: auth, db: pooler}
+}
+
+// Pagination Related
+
+type postsData struct {
+	PostID      int       `json:"post_id"`
+	PostTitle   string    `json:"post_title"`
+	PostContent string    `json:"post_content"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type paginationJson struct {
+	NextCursor string `json:"next_cursor"`
+	HasMore    bool   `json:"has_more"`
+}
+
+type postsReturn struct {
+	Data       []postsData    `json:"data"`
+	Pagination paginationJson `json:"pagination"`
+}
+
+// this is only used for the creation of the signed HMAC nextCursor value nothing else..
+type nextCursor struct {
+	Timestamp time.Time `json:"timestamp"`
+	ID        int       `json:"post_id"`
 }
 
 // i need the register struct which is being required for every registration process.
@@ -281,7 +306,6 @@ func (db *DBPooler) NewPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var post_detail post
-
 	err := json.NewDecoder(r.Body).Decode(&post_detail)
 	if err != nil {
 		log.Printf("JSON Decoder Error: %v", err)
@@ -305,10 +329,10 @@ func (db *DBPooler) NewPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query_st := `INSERT INTO app.posts (post_title,post_content) VALUES ($1, $2);`
+	query_st := `INSERT INTO app.posts (user_id,post_title,post_content) VALUES ($1, $2, $3);`
 
-	tag, err := db.dbPool.Exec(ctx, query_st, post_detail.PostTitle, post_detail.PostContent)
-	if err != nil || tag.RowsAffected() == 0 {
+	tag, err := db.dbPool.Exec(ctx, query_st, result.user_id, post_detail.PostTitle, post_detail.PostContent)
+	if err != nil || tag.RowsAffected() == 0 || !tag.Insert() {
 		log.Printf("Insertion Failed : %v", err)
 		internal_server_error(w, "Unexpected instance cause internal server error. TRY LATER :) ")
 		return
@@ -335,7 +359,7 @@ func (db *DBPooler) GetPostsHandler(w http.ResponseWriter, r *http.Request) {
 	// only for the READ Requests where we have public url having username  like this {username}/post
 	// then we have to check the JWT ID and the username belong to same or not
 	var given_user_id_check int
-	query_check := `SELECT user_id FROM app.users where username=$1;`
+	query_check := `SELECT user_id FROM app.user where username=$1;`
 	err := db.dbPool.QueryRow(ctx, query_check, username).Scan(&given_user_id_check)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -391,22 +415,22 @@ func (db *DBPooler) GetPostsHandler(w http.ResponseWriter, r *http.Request) {
 
 	var count int
 	var last_q_post_id int
-	var last_q_created_at string
+	var last_q_created_at time.Time
 	var post_data []postsData
 
 	// username := r.PathValue("username")
 
-	n_cursor := r.URL.Query().Get("next_cursor")
 	limit_st := r.URL.Query().Get("limit")
+	n_cursor := r.URL.Query().Get("next_cursor")
 
 	limit, err := strconv.Atoi(limit_st)
 	if err != nil {
 		log.Printf("Query parameter conversion error: %v\n", err)
 		internal_server_error(w, "")
-
+		return
 	}
 
-	if n_cursor != "" {
+	if limit != 0 && n_cursor != "" {
 		// n_cursor is not null only when there is still value and all
 
 		var nc nextCursor
@@ -420,7 +444,7 @@ func (db *DBPooler) GetPostsHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			query_st := `SELECT post_id , post_title, post_content from app.posts where user_id = $1 and created_at > $3 limit $4;`
+			query_st := `SELECT post_id , post_title, post_content, created_at from app.posts where user_id = $1 and created_at > $2 limit $3;`
 			rows, err := db.dbPool.Query(ctx, query_st, result.user_id, nc.Timestamp, limit)
 			if err != nil {
 				log.Printf("DB Error: %v\n", err)
@@ -428,19 +452,33 @@ func (db *DBPooler) GetPostsHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			defer rows.Close()
+
 			for rows.Next() {
+
+				log.Println("inside the for loop if block ", len(post_data))
 				var resp postsData
-				rows.Scan(&resp.PostID, &resp.PostTitle, &resp.PostContent, &resp.CreatedAt)
+
+				if err := rows.Scan(&resp.PostID, &resp.PostTitle, &resp.PostContent, &resp.CreatedAt); err != nil {
+					log.Printf("Scan failed: %v", err)
+					internal_server_error(w, "")
+					return
+				}
+
 				post_data = append(post_data, resp)
 
 			}
 
-			log.Println("len if block", len(post_data))
-
+		} else {
+			ret_json := response("BAD_REQUEST", 400, "Invalid next_cursor")
+			w.Header().Add("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write(ret_json)
+			return
 		}
-	} else {
+	} else if limit != 0 && n_cursor == "" {
 
-		query_st := `SELECT post_id , post_title, post_content from app.posts where user_id = $1  limit $2;`
+		query_st := `SELECT post_id , post_title, post_content, created_at from app.posts where user_id = $1  limit $2;`
 		rows, err := db.dbPool.Query(ctx, query_st, result.user_id, limit)
 		if err != nil {
 			log.Printf("DB Error: %v\n", err)
@@ -449,20 +487,25 @@ func (db *DBPooler) GetPostsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for rows.Next() {
+
 			var resp postsData
-			rows.Scan(&resp.PostID, &resp.PostTitle, &resp.PostContent, &resp.CreatedAt)
+			if err := rows.Scan(&resp.PostID, &resp.PostTitle, &resp.PostContent, &resp.CreatedAt); err != nil {
+				log.Printf("Scan failed: %v", err)
+				internal_server_error(w, "")
+				return
+			}
+
 			post_data = append(post_data, resp)
 
 		}
 
-		log.Println("len else block", len(post_data))
+		defer rows.Close()
+
 	}
 
-	log.Println("len before check block", len(post_data))
 	// why this check cause it is very important to know that we are already using the sql limit keyword to get to that much of row
 	// if the row is less than that means it has that much only
 	if len(post_data) > 0 {
-		log.Println("Len of post_data is > 0")
 		last_q_created_at = post_data[len(post_data)-1].CreatedAt
 		query_st_has_more := `SELECT count(*) from app.posts where user_id= $1 and created_at> $2`
 

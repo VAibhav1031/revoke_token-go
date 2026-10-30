@@ -23,13 +23,17 @@ POSTS=(
 
 
 for fruit in "${POSTS[@]}"; do
-    echo "$fruit"
+    # echo "$fruit"
     curl -X POST \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
     -d "$fruit" \
-    "http://localhost:2102/useNaKe@444/post" >/dev/null 2>&1
+    "http://localhost:2102/post" >/dev/null 2>&1
 done
 
 
-curl  -X GET -H "Content-Type:application/json" -H "Authorization: Bearer $TOKEN"  "http://localhost:2102/useNake@444/post?limit=2" | jq 
+curl  -X GET -H "Content-Type:application/json" -H "Authorization: Bearer $TOKEN"  "http://localhost:2102/useNaKe@444/post?limit=2" | jq 
+
+echo "Here is the Token (use it for the further requests..): $TOKEN"
+
+echo "DONE..."

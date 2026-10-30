@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS app.user(
 
 CREATE TABLE IF NOT EXISTS app.posts(
     post_id INT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    user_id INT REFERENCES app.user(user_id),
+    user_id INT REFERENCES app.user(user_id) NOT NULL,
     post_title VARCHAR(100) NOT NULL,
     post_content VARCHAR(500) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
